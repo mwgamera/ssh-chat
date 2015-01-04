@@ -32,7 +32,8 @@ const (
    /whois $NAME         - Display information about another connected user.
    /msg $NAME $MESSAGE  - Sends a private message to a user.
    /motd                - Prints the Message of the Day.
-   /theme [color|mono]  - Set client theme.`
+   /theme [color|mono]  - Set client theme.
+   /zone [-|$ZONE]      - Set zone for time stamps.`
 
 	// OpHelpText is the additional text returned by /help if the client is an Op
 	OpHelpText string = `Available operator commands:
@@ -75,6 +76,7 @@ type Client struct {
 	termHeight    int
 	silencedUntil time.Time
 	lastTX        time.Time
+	timeZone      *time.Location
 	beepMe        bool
 	colorMe       bool
 	closed        bool
@@ -84,14 +86,15 @@ type Client struct {
 // NewClient constructs a new client
 func NewClient(server *Server, conn *ssh.ServerConn) *Client {
 	return &Client{
-		Server:  server,
-		Conn:    conn,
-		Name:    conn.User(),
-		Color:   RandomColor256(),
-		Msg:     make(chan string, MsgBuffer),
-		ready:   make(chan struct{}, 1),
-		lastTX:  time.Now(),
-		colorMe: true,
+		Server:   server,
+		Conn:     conn,
+		Name:     conn.User(),
+		Color:    RandomColor256(),
+		Msg:      make(chan string, MsgBuffer),
+		ready:    make(chan struct{}, 1),
+		lastTX:   time.Now(),
+		timeZone: nil,
+		colorMe:  true,
 	}
 }
 
@@ -447,7 +450,24 @@ func (c *Client) handleShell(channel ssh.Channel) {
 					// Rename to reset prompt
 					c.Rename(c.Name)
 				}
-
+			case "/zone":
+				if len(parts) >= 2 {
+					if parts[1] == "-" {
+						c.timeZone = nil
+					} else {
+						if loc, err := time.LoadLocation(parts[1]); err != nil {
+							c.SysMsg("Bad zone: %s", err)
+							continue
+						} else {
+							c.timeZone = loc
+						}
+					}
+				}
+				if c.timeZone == nil {
+					c.SysMsg("Current zone is not set. Timestamps disabled.")
+				} else {
+					c.SysMsg("Current zone is %s", c.timeZone)
+				}
 			case "/whitelist": /* whitelist a fingerprint */
 				if !c.Server.IsOp(c) {
 					c.SysMsg("You're not an admin.")

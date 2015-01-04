@@ -23,6 +23,7 @@ const (
 	privateMessageFormat = "\033[1m"
 	highlightFormat      = Bold + "\033[48;5;11m\033[38;5;16m"
 	beep                 = "\007"
+	timestampFormat      = "[15:04] "
 )
 
 var (
@@ -115,9 +116,16 @@ func (s *Server) Broadcast(msg string, except *Client) {
 	s.RLock()
 	defer s.RUnlock()
 
+	now := time.Now()
+
 	for _, client := range s.clients {
 		if except != nil && client == except {
 			continue
+		}
+
+		timestamp := ""
+		if client.timeZone != nil {
+			timestamp = systemMessageFormat + now.In(client.timeZone).Format(timestampFormat) + Reset
 		}
 
 		if strings.Contains(msg, client.Name) {
@@ -126,9 +134,9 @@ func (s *Server) Broadcast(msg string, except *Client) {
 			if client.beepMe {
 				personalMsg += beep
 			}
-			client.Send(personalMsg)
+			client.Send(timestamp + personalMsg)
 		} else {
-			client.Send(msg)
+			client.Send(timestamp + msg)
 		}
 	}
 }
